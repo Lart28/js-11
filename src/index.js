@@ -2,19 +2,17 @@ import Notiflix from 'notiflix';
 import PhotoApiService from './gallery-service';
 import SimpleLightbox from "simplelightbox";
 import "simplelightbox/dist/simple-lightbox.min.css";
+import debounce from 'lodash.debounce';
 const formEl = document.querySelector('#search-form');
 const galleryEl = document.querySelector('.gallery');
 const moreButton = document.querySelector('[data-action-more]');
 const photoApiService = new PhotoApiService;
 const lightbox = new SimpleLightbox('.gallery a', { /* options */ });
-const debounce = require('lodash.debounce');
-
-
-
+let pagesQuantity = 0;
 
 formEl.addEventListener('submit', onSearch);
 // moreButton.addEventListener('click', onMoreButton);
-window.addEventListener('scroll', onScroll);
+window.addEventListener('scroll', debounce(onScroll, 250));
 
 function onSearch(event) {
   event.preventDefault();
@@ -22,13 +20,19 @@ function onSearch(event) {
   galleryEl.innerHTML = '';
   photoApiService.query = event.target.elements.searchQuery.value;
   photoApiService.resetPage();
+  pagesQuantity = 0;
   photoApiService.fetchQuery().then(result => {
+    pagesQuantity = Math.ceil(result.totalHits / 40);
     photoApiService.incrementPage();
     if (result.hits.length < 1) {
       Notiflix.Notify.info("Sorry, there are no images matching your search query. Please try again.");
+    } else if (result.hits.length < 40 && result.hits.length > 0) {
+      Notiflix.Notify.success(`Hooray! We found ${result.totalHits} images.`);
+      moreButton.classList.add('is-hidden');
+      createMarkup(result);
     } else {
       Notiflix.Notify.success(`Hooray! We found ${result.totalHits} images.`);
-      createMarkup(result)
+      createMarkup(result);
       lightbox.refresh();
       moreButton.classList.remove('is-hidden');
       // const { height: cardHeight } = document
@@ -83,9 +87,9 @@ function createMarkup(data) {
 
 function onScroll() {
   const documentRect = document.documentElement.getBoundingClientRect();
-  if (documentRect.bottom < document.documentElement.clientHeight + 280){
+  if ((documentRect.bottom < document.documentElement.clientHeight + 280) && (pagesQuantity >= photoApiService.page)){
     photoApiService.fetchQuery().then(result => {
-    if (result.hits.length < 40 && result.hits.length > 0) {
+    if ((result.hits.length < 40 && result.hits.length > 0) || (pagesQuantity === photoApiService.page)) {
       moreButton.classList.add('is-hidden');
       Notiflix.Notify.info("We're sorry, but you've reached the end of search results.");
     }
